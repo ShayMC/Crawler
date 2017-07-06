@@ -72,7 +72,6 @@ void WordsTransfer::creatWordsTransfer(const string rawPagesPath, const string d
 																								break;
 																}
 								}
-
 								// do some html preprocessing
 								string ret[8];
 								HtmlPreprocesser::delBetweenHtmlTags(content, "script", ret[0]);

@@ -1,5 +1,5 @@
 
-#include <sstream>      // std::istringstream
+#include <sstream>
 #include <iostream>
 #include <map>
 #include <set>
@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
+#include "HNode.h"
 #include "Crawler.h"
 #include "HttpClient.h"
 #include "WordsTransfer.h"
@@ -16,11 +17,9 @@
 using namespace std;
 
 multimap<string, string> unvisitedUrls; // <host, urlStr>	we crawl urls on the same host first
-multimap<string, string> noRobotUrl; // <host, not allowed robot urls>
+multimap<string, HNode> HostData; // <host, visitedHost and not for Robot Url>
 
-
-pthread_mutex_t noRobotUrlMutex = PTHREAD_MUTEX_INITIALIZER;  // not allowed robot urls
-pthread_mutex_t unvisitedUrlsMutex = PTHREAD_MUTEX_INITIALIZER;  // unvisited urls
+pthread_mutex_t hostDataMutex = PTHREAD_MUTEX_INITIALIZER;  // not allowed robot urls
 pthread_mutex_t _rawPagesOfsMutex = PTHREAD_MUTEX_INITIALIZER;
 
 Crawler::Crawler(ifstream &urlSeedIfs, ofstream &rawPagesOfs, int numThreads) :
@@ -33,66 +32,6 @@ static void sigTerm(int x)
 {
 								cerr << "Terminated!" << endl;
 								exit(0);
-}
-
-void Crawler::addUnvisitedUrl(string urlStr)
-{
-								// check the url
-								if(urlStr.empty() || urlStr.size() > 256)
-																return;
-								if(Url::isSpamLink(urlStr))
-																return;
-								if(Url::isImageUrl(urlStr))
-																return;
-
-								Url url(urlStr);
-								if(url.getIp() == "")
-																return;
-								if(url.getHost().size() < 6)
-																return;
-								string protocol = url.getProtocol();
-								for(size_t i = 0; i < protocol.size(); ++i)
-																protocol[i] = tolower(protocol[i]);
-								if(protocol != "http")
-																return;
-
-								pthread_mutex_lock(&noRobotUrlMutex);
-								multimap<string, string>::iterator it = noRobotUrl.find(url.getHost());
-								if(it != noRobotUrl.end())
-								{
-																string links=it->second;
-
-																istringstream is(links);
-																string link="";
-																while(is >> link) {
-
-																								if(url.getUrlStr().find(link)!=string::npos)
-																																return;
-																}
-								}
-								pthread_mutex_unlock(&noRobotUrlMutex);
-
-
-								pthread_mutex_lock(&unvisitedUrlsMutex);
-								//cout << "HOST: " << url.getHost() <<"  URL: " << url.getUrlStr() << endl;
-								unvisitedUrls.insert(unvisitedUrls.end(),make_pair(url.getHost(), url.getUrlStr()));
-								pthread_mutex_unlock(&unvisitedUrlsMutex);
-}
-
-void Crawler::addNoRobotdUrl(string urlStr, string host)
-{
-								if(urlStr.empty() || urlStr.size() > 256)
-																return;
-
-								pthread_mutex_lock(&noRobotUrlMutex);
-								multimap<string, string>::iterator it = noRobotUrl.find(host);
-								if(it != noRobotUrl.end()) {
-																string links =it->second;
-
-																links += urlStr +" ";
-																it->second = links;
-								}
-								pthread_mutex_unlock(&noRobotUrlMutex);
 }
 
 void Crawler::initUnvisitedUrlsSet()
@@ -137,7 +76,7 @@ int Crawler::multiPthreadCrawl()
 																cerr << "malloc error" << endl;
 																return -1;
 								}
-								for(unsigned int i=0; i < _numThreads; i++) {
+								for(int i=0; i < _numThreads; i++) {
 																if(pthread_create(&tids[i], NULL, threadFun, this) != 0) {
 																								cerr << "create threads error" << endl;
 																								return -1;
@@ -146,7 +85,7 @@ int Crawler::multiPthreadCrawl()
 
 								// Wait for the threads.
 								cout << "main thread is waiting for threads" << endl;
-								for (unsigned int i = 0; i < _numThreads; ++i) {
+								for (int i = 0; i < _numThreads; ++i) {
 																if(pthread_join(tids[i], NULL) != 0) {
 																								cerr << "pthread_join error" << endl;
 																								return -1;
@@ -162,15 +101,73 @@ int Crawler::multiPthreadCrawl()
 								return 0;
 }
 
+void Crawler::addUnvisitedUrl(string urlStr)
+{
+								// check the url
+								if(urlStr.empty() || urlStr.size() > 256)
+																return;
+								if(Url::isSpamLink(urlStr))
+																return;
+								if(Url::isImageUrl(urlStr))
+																return;
+								Url url(urlStr);
+								if(url.getHost().size() < 6)
+																return;
+								if(url.getIp() == "")
+																return;
+
+								string protocol = url.getProtocol();
+								for(size_t i = 0; i < protocol.size(); ++i)
+																protocol[i] = tolower(protocol[i]);
+								if(protocol != "http")
+																return;
+
+								pthread_mutex_lock(&hostDataMutex);
+								multimap<string, HNode>::iterator it = HostData.find(url.getHost());
+								if(it != HostData.end())
+								{
+																string links = (it->second).getNoRobotUrls();
+																istringstream is(links);
+																string link="";
+																while(is >> link) {
+																								if(url.getUrlStr().find(link)!=string::npos) {
+																																pthread_mutex_unlock(&hostDataMutex);
+																																return;
+																								}
+																}
+								}
+
+								//cout << "HOST: " << url.getHost() <<"  URL: " << url.getUrlStr() << endl;
+								unvisitedUrls.insert(unvisitedUrls.end(),make_pair(url.getHost(), url.getUrlStr()));
+
+								pthread_mutex_unlock(&hostDataMutex);
+}
+
+void Crawler::addNoRobotdUrl(string urlStr, string host)
+{
+								if(urlStr.empty() || urlStr.size() > 256)
+																return;
+
+								pthread_mutex_lock(&hostDataMutex);
+
+								multimap<string, HNode>::iterator it = HostData.find(host);
+								if(it != HostData.end()) {
+
+																string links = (it->second).getNoRobotUrls();
+																links += urlStr +" ";
+																(it->second).setNoRobotUrls(links);
+								}
+								else
+																cerr << "No host data[rboot.txt]: " << urlStr << " Host: " <<  host << endl;
+
+								pthread_mutex_unlock(&hostDataMutex);
+}
+
 void Crawler::store(Url &url, HttpHeader &httpHeader, HttpContent &httpContent)
 {
 								pthread_mutex_lock(&_rawPagesOfsMutex);
 
-								if(url.getIfRobotsUrl()) {
-																_rawPagesOfs << ROBOTS_BEGIN_TAG << " " << url.getUrlStr() << endl;
-								}
-								else _rawPagesOfs << RAW_URL_BEGIN_TAG << " " << url.getUrlStr() << endl;
-
+								_rawPagesOfs << RAW_URL_BEGIN_TAG << " " << url.getUrlStr() << endl;
 								_rawPagesOfs << "OPENSE.RECORD.ID: " << _nWebPagesCrawled++ << endl;
 								_rawPagesOfs << "OPENSE.RECORD.IP: " << url.getIp() << endl;
 								_rawPagesOfs << RAW_CONTENT_LENGTH_BEGIN_TAG << " " << httpContent.getLength() << endl;
@@ -185,9 +182,8 @@ void Crawler::store(Url &url, HttpHeader &httpHeader, HttpContent &httpContent)
 								return;
 }
 
-bool Crawler::crawlSend(Url &url)
+void Crawler::crawlSend(Url &url)
 {
-
 								HttpClient httpClient;
 
 								// invoke httpClient.requestWebPage(Url &unvisitedUrl, WebPage & webPage)
@@ -195,21 +191,22 @@ bool Crawler::crawlSend(Url &url)
 								HttpContent httpContent;
 
 								if(httpClient.requestWebPage(url, httpHeader, httpContent) == -1) {
-																return false;
+																return;
 								}
+
 								// if content type of page is not we wanted, return
 								string contentType = httpHeader.getContentType();
 								if(contentType != "text/html" && contentType != "text/plain"
 											&& contentType != "text/xml" && contentType != "text/rtf") {
 																cout <<  url.getUrlStr() << ": not wanted type http content" << endl;
-																return false;
+																return;
 								}
 
 								string contentEncoding = httpHeader.getContentEncoding();
 
 								if(contentEncoding == "gzip") {
 																cout << url.getUrlStr() << ": contentEncoding is gzip" << endl;
-																return false;
+																return;
 								}
 
 								//extract links from page
@@ -227,12 +224,11 @@ bool Crawler::crawlSend(Url &url)
 																//save web page to file
 																store(url, httpHeader, httpContent);
 																httpContent.getLinks(links);
-																for(int i = 0; i < links.size(); ++i) {
-																								addUnvisitedUrl(links[i]);
+																for(unsigned int i = 0; i < links.size(); ++i) {
+																								if(links[i].compare(url.getUrlStr())!=0)
+																																addUnvisitedUrl(links[i]);
 																}
 								}
-
-
 }
 
 void Crawler::crawl()
@@ -243,12 +239,12 @@ void Crawler::crawl()
 								// Crawl Loop begin:
 								unsigned sleepTimeCnt = 0;
 								while(sleepTimeCnt < 1000*200) {
-																pthread_mutex_lock(&unvisitedUrlsMutex);
+																pthread_mutex_lock(&hostDataMutex);
 
 																// if unvisitedUrls empty, sleep some seconds
 																// and record the number of sleep for timeout
 																if(unvisitedUrls.empty()) {
-																								pthread_mutex_unlock(&unvisitedUrlsMutex);
+																								pthread_mutex_unlock(&hostDataMutex);
 																								usleep(1000);
 																								++sleepTimeCnt;
 																								continue;
@@ -258,21 +254,54 @@ void Crawler::crawl()
 																multimap<string, string>::iterator it = unvisitedUrls.begin();
 																// paser url
 																Url url(it->second);
-																Url urlRobbot(it->first+"/robots.txt");
-
-																unvisitedUrls.erase(it);
-																pthread_mutex_unlock(&unvisitedUrlsMutex);
-
-																multimap<string, string >::iterator temp = noRobotUrl.find(url.getHost());
-																if(temp == noRobotUrl.end())
+																multimap<string, HNode>::iterator itHost = HostData.find(url.getHost());
+																if(itHost != HostData.end())
 																{
-																								string urls="";
-																								pthread_mutex_lock(&noRobotUrlMutex);
-																								noRobotUrl.insert(make_pair(url.getHost(),urls));
-																								pthread_mutex_unlock(&noRobotUrlMutex);
+																								if((itHost->second).isHostBusy())
+																								{
+																																//cerr << "[skip!!]" << endl;
+																																pthread_mutex_unlock(&hostDataMutex);
+																																continue;
+																								}
+																								else{
+																																(itHost->second).setHostBusy();
+																																unvisitedUrls.erase(it);
+																																pthread_mutex_unlock(&hostDataMutex);
+																								}
+																}
+																else
+																{
+																								Url urlRobbot(it->first+"/robots.txt");
+																								HNode h("");
+																								h.setHostBusy();
+																								HostData.insert(make_pair(url.getHost(),h));
+																								unvisitedUrls.erase(it);
+																								pthread_mutex_unlock(&hostDataMutex);
 																								crawlSend(urlRobbot);
 																}
 
+																//cerr << "Num Pages Crawled:"<< _nWebPagesCrawled << ", Url arr size: "<< unvisitedUrls.size() << ", Host arr size: "<< HostData.size() << ", Current url: "<< url.getUrlStr() << endl;
 																crawlSend(url);
+
+																pthread_mutex_lock(&hostDataMutex);
+
+																multimap<string, HNode>::iterator itD = HostData.find(url.getHost());
+																if(itD != HostData.end())
+																{
+																								(itD->second).setHostNotBusy();
+
+																}
+																else cerr << "No host data[error]: " << url.getHost() << endl;
+
+																if(HostData.size() >= 150) {
+																								itD = HostData.begin();
+																								for(; itD != HostData.end(); itD++)
+																								{
+																																if(!(itD->second.isHostBusy()))
+																																								HostData.erase(itD);
+																								}
+																}
+
+																pthread_mutex_unlock(&hostDataMutex);
 								}
 }

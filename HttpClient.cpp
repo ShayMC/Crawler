@@ -122,7 +122,7 @@ int HttpClient::receiveHeader(int sockFd, string &headerStr, int timeoutSeconds)
 								return bytesRead;
 }
 
-int HttpClient::receiveContent(int sockFd, int expectLength, string &contentStr, int timeoutSeconds)
+int HttpClient::receiveContent(int sockFd, unsigned expectLength, string &contentStr, int timeoutSeconds)
 {
 								int flags;;
 								if((flags = fcntl(sockFd,F_GETFL,0)) < 0) {
@@ -197,13 +197,14 @@ int HttpClient::receiveContent(int sockFd, int expectLength, string &contentStr,
 
 int HttpClient::requestWebPage(Url &url, HttpHeader &httpHeader, HttpContent &httpContent)
 {
+								//static int max = 3;
 								// constuct a request
 								string requestStr;
 								string path = url.getPath();
 								if(path.empty())
 																path = "/";
-								requestStr = "GET " + path + " HTTP/1.0\r\nHost: " + url.getHost()
-																					+ "\r\nUser-Agent: openSE/1.0 (Ubuntu8.04)\r\nAccept-Language: zh,en-us\r\nAccept-Charset: gb2312,utf-8\r\nConnection: Keep-Alive\r\n\r\n";
+								requestStr = "GET " + path + " HTTP/1.0\r\nHost: " +url.getHost()
+																					+ "\r\nUser-Agent: openSE/1.0 (Ubuntu8.04)\r\nAccept-Language: en-US,en;q=0.7,he;q=0.3\r\nConnection: Keep-Alive\r\n\r\n";
 
 								//cout << "requestStr:\n" << requestStr << endl;
 
@@ -272,9 +273,16 @@ int HttpClient::requestWebPage(Url &url, HttpHeader &httpHeader, HttpContent &ht
 																if(locationUrlStr.empty()) {
 																								cerr << "error location in httpHeader: " << httpHeader.getHeaderStr() << endl;
 																}
+																string protocol = url.getProtocol();
+																for(size_t i = 0; i < protocol.size(); ++i)
+																								protocol[i] = tolower(protocol[i]);
+																if(protocol != "http")
+																								return -1;
+
 																//locationStr = location;
 																Url locationUrl(locationUrlStr);
 																return requestWebPage(locationUrl, httpHeader, httpContent);
+
 								}
 
 								if(stausCode < 200 || stausCode > 299) {
@@ -338,6 +346,7 @@ int HttpClient::requestWebPage(Url &url, HttpHeader &httpHeader, HttpContent &ht
 								//cout << "contentStr:\n" << contentStr << endl;
 								// set http content
 								httpContent.setContentStr(contentStr);
+								return 0;
 }
 
 int HttpClient::tcpConnect(string ip, int port)

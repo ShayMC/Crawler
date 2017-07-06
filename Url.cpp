@@ -60,8 +60,6 @@ void Url::parserUrlStr()
 								for(i = pos; i < _urlStr.size() && isValidHostChar(_urlStr[i]); ++i)
 																_host += _urlStr[i];
 
-								if(_host.find("www.")!=string::npos)
-																_host = _host.substr (strlen("www."));
 								// extract port number
 								if(i < _urlStr.size() && _urlStr[i] == ':') {
 																string portStr;
@@ -255,7 +253,7 @@ bool Url::isSpamLink(string link)
 																"p?msg", "tj_all.asp?page", ".plot.", "comment.php", "nicezyme.pl?",
 																"entr",  "compute-map?", "view-pdb?", "list.cgi?", "lists.cgi?",
 																"details.pl?", "aligner?", "raw.pl?", "interface.pl?","memcp.php?",
-																"member.php?", "post.php?", "thread.php", "bbs/",  "/bbs"
+																"member.php?", "post.php?", "thread.php", "bbs/",  "/bbs", "pdf"
 								};
 								for(size_t i = 0; i < sizeof(filter_str)/sizeof(filter_str[0]); i++) {
 																if(link.find(filter_str[i]) != string::npos)

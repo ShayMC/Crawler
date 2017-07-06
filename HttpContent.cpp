@@ -86,7 +86,7 @@ void HttpContent::getLinks(vector<string> &links)
 void HttpContent::setNotForRobotStr(string links)
 {
 
-								_NotForRobotStr=links;
+								_NotForRobotStr = links;
 }
 
 string HttpContent::getNotForRobot()
@@ -97,13 +97,24 @@ string HttpContent::getNotForRobot()
 void HttpContent::linksRobotHtml()
 {
 								string links = "";
-								string::size_type posBegin = 0, posEnd = 0;
+								string::size_type posBegin = 0, posEnd = 0, posStop = 0;
+								bool end = false;
+
+								if((posBegin = _contentStr.find("User-agent:*", posBegin)) == string::npos
+											&& (posBegin = _contentStr.find("User-agent: *", posBegin)) == string::npos)
+																return;
+
+								posStop = posBegin + strlen("User-agent:");
+								if((posStop = _contentStr.find("User-agent: ", posStop)) != string::npos)
+																end= true;
 								while((posBegin = _contentStr.find("Disallow:", posBegin)) != string::npos
 														&& (posEnd = _contentStr.find("\n", posBegin)) != string::npos) {
+																if(end && posBegin >= posStop) break;
 																posBegin += strlen("Disallow:");
 																string link = _contentStr.substr(posBegin, posEnd - posBegin);
-																if(!Url::isSpamLink(link))
+																if(!Url::isSpamLink(link)) {
 																								links+=link + " ";
+																}
 								}
 								setNotForRobotStr(links);
 }

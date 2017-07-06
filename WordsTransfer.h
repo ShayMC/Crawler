@@ -21,5 +21,4 @@ ifstream _rawPagesFile;
 ofstream _dictFile;
 };
 
-
 #endif

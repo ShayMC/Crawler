@@ -13,7 +13,7 @@ class Crawler
 public:
 Crawler(ifstream &urlSeedIfs, ofstream &rawPagesOfs, int numThreads);
 int multiPthreadCrawl();
-bool crawlSend(Url &url);
+void crawlSend(Url &url);
 void crawl();
 
 

@@ -1,5 +1,4 @@
 
-
 #ifndef HTTPCLIENT_H
 #define HTTPCLIENT_H
 
@@ -26,7 +25,7 @@ int nonbConnect(int sockFd,struct sockaddr* sa,int timeoutSeconds);
 ssize_t rio_writen(int fd, const char *usrbuf, size_t n);
 ssize_t rio_readn(int fd, char *usrbuf, size_t n);
 int receiveHeader(int sockFd, string &headerStr, int timeoutSeconds);
-int receiveContent(int sockFd, int expectLength, string &contentStr, int timeoutSeconds);
+int receiveContent(int sockFd, unsigned int expectLength, string &contentStr, int timeoutSeconds);
 };
 
 #endif

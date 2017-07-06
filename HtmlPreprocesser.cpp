@@ -84,7 +84,6 @@ bool HtmlPreprocesser::delComments(const string &str, string &ret)
 								return !inComment;
 }
 
-
 // delete all the content in the < > including < and >
 // < and > must appear in pairs and cann't be nested
 bool HtmlPreprocesser::delTags(const string &str, string &ret)
@@ -123,7 +122,6 @@ void HtmlPreprocesser::replaceStr(const string &str, const string src, const str
 																else
 																								ret += str[i++];
 								}
-
 }
 
 void HtmlPreprocesser::delOddchar(const string &str, const string dest, string &ret)
